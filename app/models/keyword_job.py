@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, ForeignKey, Table, TIMESTAMP
 from sqlalchemy.sql import func
-from .base import Base
+from database.base import Base
 
 keyword_job = Table(
     "keyword_job",

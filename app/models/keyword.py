@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, Text
 from sqlalchemy.orm import relationship
-from .base import Base
+from database.base import Base
 
 class Keyword(Base):
     __tablename__ = "keyword"

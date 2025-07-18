@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, BigInteger, TIMESTAMP, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from .base import Base
+from database.base import Base
 
 class Job(Base):
     __tablename__ = "job"
