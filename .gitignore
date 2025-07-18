@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.env
+.env
+*.sqlite3
+*.db
+
+# VSCode or PyCharm
+.vscode/
+.idea/
+
+# System
+.DS_Store
+
+# Virtualenv
+venv/
+.env/
+
+# Migrations (optional)
+alembic/
+*.log
