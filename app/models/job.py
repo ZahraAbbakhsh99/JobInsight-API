@@ -11,7 +11,6 @@ class Job(Base):
     salary = Column(BigInteger, nullable=True)
     requirements = Column(Text, nullable=False)
     link = Column(Text, nullable=False, unique=True)
-    posted_at = Column(TIMESTAMP, nullable=True)
     scraped_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
 
     keywords = relationship("Keyword", secondary="keyword_job", back_populates="jobs")
