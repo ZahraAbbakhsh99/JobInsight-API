@@ -12,4 +12,4 @@ app = FastAPI()
 def startup():
     Base.metadata.create_all(bind=engine)
 
-app.include_router(scrape.router, prefix="/")
+app.include_router(scrape.router, prefix="")

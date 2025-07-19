@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from schemas.scrape import ScrapeRequest, ScrapedJob
+from app.schemas.scrape import ScrapeRequest, ScrapedJob
 from typing import List
 
 router = APIRouter()
