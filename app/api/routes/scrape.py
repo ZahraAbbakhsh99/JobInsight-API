@@ -1,13 +1,17 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 from app.schemas.scrape import ScrapeRequest, ScrapedJob
 from typing import List
 from scraper.JobVision import scraping_JobVision 
 from scraper.Karbord import scraping_Karbord
+from app.schemas.job import JobCreate, JobOut
+from app.crud.job import create_jobs_bulk
+from database.session import get_db
 
 router = APIRouter()
 
 @router.post("/scrape/", response_model=List[ScrapedJob])
-def scrape_jobs(request: ScrapeRequest):
+def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
 
     """
     Scrape job listings from JobVision and Karbord based on the keyword and limit provided.
@@ -23,15 +27,33 @@ def scrape_jobs(request: ScrapeRequest):
         List[ScrapedJob]: A unified list of structured job postings.
     """
     
-    jobvision_count = int(request.limit * 0.6)
-    karbord_count = request.limit - jobvision_count
+    # jobvision_count = int(request.limit * 0.6)
+    # karbord_count = request.limit - jobvision_count
 
-    jobs_jobvision = scraping_JobVision(request.keyword, jobvision_count)
-    jobs_karbord = scraping_Karbord(request.keyword, karbord_count)
+    jobs_jobvision = scraping_JobVision(request.keyword, 1)
+    # jobs_karbord = scraping_Karbord(request.keyword, karbord_count)
 
-    all_jobs = jobs_jobvision + jobs_karbord
-    return all_jobs
+    # map scraped dicts -> JobCreate
+    to_create: List[JobCreate] = [
+        JobCreate(
+            title=job["title"],
+            salary=job.get("salary"),
+            requirements=job.get("requirements", ["نامشخص"]),
+            link=job["link"]
+        )
+        # for job in (jobs_jobvision + jobs_karbord)
+        for job in (jobs_jobvision)
+    ]
+    print(to_create)
+    saved = create_jobs_bulk(db, to_create)
 
+    return saved
+    
+    # _____ return result without storage 
+    # all_jobs = jobs_jobvision + jobs_karbord
+    # return all_jobs
+
+    # _____ mock result
     # return [
     #     ScrapedJob(
     #         title=f"{request.keyword} Developer",
