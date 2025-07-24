@@ -26,12 +26,17 @@ def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
     Returns:
         List[ScrapedJob]: A unified list of structured job postings.
     """
-    
-    # jobvision_count = int(request.limit * 0.6)
-    # karbord_count = request.limit - jobvision_count
+    if request.limit == 0:
+        return []
+    elif request.limit == 1 :
+        jobvision_count = request.limit
+        karbord_count= 0
+    else: 
+        jobvision_count = int(request.limit * 0.6)
+        karbord_count = request.limit - jobvision_count
 
-    jobs_jobvision = scraping_JobVision(request.keyword, 1)
-    # jobs_karbord = scraping_Karbord(request.keyword, karbord_count)
+    jobs_jobvision = scraping_JobVision(request.keyword, jobvision_count)
+    jobs_karbord = scraping_Karbord(request.keyword, karbord_count)
 
     # map scraped dicts -> JobCreate
     to_create: List[JobCreate] = [
@@ -41,8 +46,7 @@ def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
             requirements=job.get("requirements", ["نامشخص"]),
             link=job["link"]
         )
-        # for job in (jobs_jobvision + jobs_karbord)
-        for job in (jobs_jobvision)
+        for job in (jobs_jobvision + jobs_karbord)
     ]
     print(to_create)
     saved = create_jobs_bulk(db, to_create)
