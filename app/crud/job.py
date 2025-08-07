@@ -1,70 +1,64 @@
 from typing import Iterable, List
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, update, func
 from app.models.job import Job
 from app.schemas.job import JobCreate
-from app.schemas.scrape import ScrapedJob
+from sqlalchemy.exc import IntegrityError
+from datetime import datetime
+from datetime import datetime
 
 def _requirements_to_text(reqs: List[str] | None) -> str:
     if not reqs:
         return "نامشخص"
     return ",".join(reqs)
 
-def _requirements_to_list(reqs: str | None) -> List[str]:
-    if not reqs:
-        return ["نامشخص"]
-    return [r.strip() for r in reqs.split("-")]
-
-
-def get_by_link(db: Session, link: str) -> Job | None:
-    return db.execute(select(Job).where(Job.link == link)).scalar_one_or_none()
-
-def create_job(db: Session, job_in: JobCreate) -> Job:
-    
-    if get_by_link(db, job_in.link):
-        return get_by_link(db, job_in.link)
-
-    db_object = Job(
-        title=job_in.title,
-        salary = job_in.salary,
-        requirements=_requirements_to_text(job_in.requirements),
-        link=job_in.link
-    )
-    db.add(db_object)
-    db.commit()
-    db.refresh(db_object)
-    return db_object
-
 def create_jobs_bulk(db: Session, jobs_in: Iterable[JobCreate]) -> List[Job]:
-    saved: List[Job] = []
-    seen_links = set()
+    jobs_ids = []
     
-    for job_in in jobs_in:
-        existing =job_in.link in seen_links or get_by_link(db, job_in.link)
-        if existing:
-            saved.append(existing)
-            continue
-        db_object = Job(
-            title=job_in.title,
-            salary= job_in.salary,
-            requirements=_requirements_to_text(job_in.requirements),
-            link=job_in.link,
-        )
-        db.add(db_object)
-        saved.append(db_object)
-        seen_links.add(job_in.link)
-    db.commit()
+    for job in jobs_in:
+        success = False
+        for attempt in range(2):
+            try: 
+                db_object = Job(
+                    title=job.title,
+                    salary= job.salary,
+                    requirements=_requirements_to_text(job.requirements),
+                    link=job.link,
+                )
+                db.add(db_object)
+                db.flush()
+                db.commit()
+                jobs_ids.append(db_object.id)
+                success = True
+                break
 
-    for object in saved:
-        try:
-            db.refresh(object)
-        except:
-            pass
-    return [
-        ScrapedJob(
-            title=object.title,
-            salary=object.salary,
-            link=object.link,
-            requirements=_requirements_to_list(object.requirements)
-        )
-    ]
+            except IntegrityError:
+                db.rollback()
+                existing_job = db.execute(
+                    select(Job).where(Job.link == job.link)
+                ).scalar_one_or_none()
+
+                if existing_job:
+                    statement  = (
+                        update(Job)
+                        .where(Job.id == existing_job.id)
+                        .values(
+                            title=job.title,
+                            salary=job.salary,
+                            requirements=_requirements_to_text(job.requirements),
+                            scraped_at=func.now()
+                        )
+                    )
+                    db.execute(statement )
+                    db.commit()
+                    db.refresh(existing_job)
+                    jobs_ids.append(existing_job.id)
+                    success = True
+                    break
+            except Exception:
+                db.rollback()
+
+        if not success:
+            return {"status": 0}
+
+    return {"status": 1, "job_ids": jobs_ids}

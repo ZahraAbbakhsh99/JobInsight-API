@@ -7,6 +7,7 @@ from scraper.Karbord import scraping_Karbord
 from app.schemas.job import JobCreate, JobOut
 from app.crud.job import create_jobs_bulk
 from database.session import get_db
+import re
 
 router = APIRouter()
 
@@ -44,14 +45,13 @@ def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
             title=job["title"],
             salary=job.get("salary"),
             requirements=job.get("requirements", ["نامشخص"]),
-            link=job["link"]
+            link=normalize_job_link(job["link"])
         )
         for job in (jobs_jobvision + jobs_karbord)
     ]
-    print(to_create)
-    saved = create_jobs_bulk(db, to_create)
-
-    return saved
+    jobs_result = create_jobs_bulk(db, to_create)
+    if jobs_result["status"]:
+        return to_create
     
     # _____ return result without storage 
     # all_jobs = jobs_jobvision + jobs_karbord
@@ -72,3 +72,25 @@ def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
     #         requirements=["Python"]
     #     )
     # ]
+
+
+
+def normalize_job_link(link: str) -> str:
+    """
+    Normalize job links from known sources like JobVision or Karbord.
+    Returns a cleaned link containing only the base + unique ID.
+    """
+    if "jobvision.ir" in link:
+        match = re.search(r'/jobs/(\d+)', link)
+        if match:
+            job_id = match.group(1)
+            return f"https://jobvision.ir/jobs/{job_id}"
+        
+    elif "karbord.io" in link:
+        match = re.search(r'/jobs/detail/(\d+)', link)
+        if match:
+            job_id = match.group(1)
+            return f"https://karbord.io/jobs/detail/{job_id}"
+
+    # fallback: return original if not matched
+    return link
