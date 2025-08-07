@@ -29,14 +29,14 @@ def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
     if request.limit == 0:
         return []
     elif request.limit == 1 :
-        jobvision_count = request.limit
-        karbord_count= 0
+        jobs_jobvision = scraping_JobVision(request.keyword, request.limit)
+        jobs_karbord =[]
     else: 
         jobvision_count = int(request.limit * 0.6)
         karbord_count = request.limit - jobvision_count
 
-    jobs_jobvision = scraping_JobVision(request.keyword, jobvision_count)
-    jobs_karbord = scraping_Karbord(request.keyword, karbord_count)
+        jobs_jobvision = scraping_JobVision(request.keyword, jobvision_count)
+        jobs_karbord = scraping_Karbord(request.keyword, karbord_count)
 
     # map scraped dicts -> JobCreate
     to_create: List[JobCreate] = [
