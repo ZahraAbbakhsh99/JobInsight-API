@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.schemas.scrape import ScrapeRequest, ScrapedJob
 from typing import List
@@ -6,6 +6,7 @@ from scraper.JobVision import scraping_JobVision
 from scraper.Karbord import scraping_Karbord
 from app.schemas.job import JobCreate, JobOut
 from app.crud.job import create_jobs_bulk
+from app.crud.keyword import get_or_create_keyword
 from database.session import get_db
 import re
 
@@ -27,17 +28,46 @@ def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
     Returns:
         List[ScrapedJob]: A unified list of structured job postings.
     """
+     
     if request.limit == 0:
         return []
+    
     elif request.limit == 1 :
-        jobs_jobvision = scraping_JobVision(request.keyword, request.limit)
-        jobs_karbord =[]
-    else: 
-        jobvision_count = int(request.limit * 0.6)
-        karbord_count = request.limit - jobvision_count
+        keyword_result = get_or_create_keyword(db , request.keyword)
 
-        jobs_jobvision = scraping_JobVision(request.keyword, jobvision_count)
-        jobs_karbord = scraping_Karbord(request.keyword, karbord_count)
+        if keyword_result["status"] == 0 :
+
+            jobs_jobvision = scraping_JobVision(request.keyword, request.limit)
+            jobs_karbord =[]
+            jobs = jobs_jobvision + jobs_karbord
+            keyword_id = keyword_result["id"]
+
+        elif keyword_result["status"] == 1:
+            pass # Retrieved from the database with conditions
+            jobs = []
+            keyword_id = keyword_result["id"]
+        else: 
+            raise HTTPException(status_code=400, detail="Invalid keyword status.")
+
+    else: 
+        keyword_result = get_or_create_keyword(db , request.keyword)
+
+        if keyword_result["status"] == 0 :
+            jobvision_count = int(request.limit * 0.6)
+            karbord_count = request.limit - jobvision_count
+
+            jobs_jobvision = scraping_JobVision(request.keyword, jobvision_count)
+            jobs_karbord = scraping_Karbord(request.keyword, karbord_count)
+            jobs = jobs_jobvision + jobs_karbord
+
+            keyword_id = keyword_result["id"]
+
+        elif keyword_result["status"] == 1:
+            pass # Retrieved from the database with conditions
+            jobs= []
+            keyword_id = keyword_result["id"]
+        else: 
+            raise HTTPException(status_code=400, detail="Invalid keyword status.")
 
     # map scraped dicts -> JobCreate
     to_create: List[JobCreate] = [
@@ -47,7 +77,7 @@ def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
             requirements=job.get("requirements", ["نامشخص"]),
             link=normalize_job_link(job["link"])
         )
-        for job in (jobs_jobvision + jobs_karbord)
+        for job in (jobs)
     ]
     jobs_result = create_jobs_bulk(db, to_create)
     if jobs_result["status"]:
