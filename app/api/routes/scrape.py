@@ -7,6 +7,7 @@ from scraper.Karbord import scraping_Karbord
 from app.schemas.job import JobCreate, JobOut
 from app.crud.job import create_jobs_bulk
 from app.crud.keyword import get_or_create_keyword
+from app.crud.keyword_job import create_keyword_job_relations
 from database.session import get_db
 import re
 
@@ -81,7 +82,8 @@ def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
     ]
     jobs_result = create_jobs_bulk(db, to_create)
     if jobs_result["status"]:
-        return to_create
+        if create_keyword_job_relations(db, keyword_id, jobs_result["job_ids"]):
+            return to_create
     
     # _____ return result without storage 
     # all_jobs = jobs_jobvision + jobs_karbord
