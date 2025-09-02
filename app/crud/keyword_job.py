@@ -1,4 +1,4 @@
-from sqlalchemy import select, update, func
+from sqlalchemy import select, update, delete, func
 from sqlalchemy.orm import Session
 from app.models.keyword_job import keyword_job
 
@@ -74,3 +74,33 @@ def create_keyword_job_relations(db: Session, keyword_id: int, job_ids: list[int
     return {
         "status": status,
     }
+
+def delete_keyword_job_records(db: Session, keyword_id: int = None, job_id: int = None) -> int:
+    """
+    Delete records from keyword_job table based on keyword_id, job_id, or both.
+
+    Args:
+        db (Session): SQLAlchemy DB session
+        keyword_id (int, optional): filter by keyword_id
+        job_id (int, optional): filter by job_id
+
+    Returns:
+        int: Number of deleted records
+    """
+    if not keyword_id and not job_id:
+        return 0
+
+    statement = delete(keyword_job)
+
+    if keyword_id:
+        statement = statement.where(keyword_job.c.keyword_id == keyword_id)
+    if job_id:
+        statement = statement.where(keyword_job.c.job_id == job_id)
+
+    try:
+        result = db.execute(statement)
+        db.commit()
+        return result.rowcount
+    except Exception:
+        db.rollback()
+        return 0

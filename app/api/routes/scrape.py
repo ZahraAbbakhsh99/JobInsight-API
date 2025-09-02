@@ -4,12 +4,12 @@ from app.schemas.scrape import ScrapeRequest, ScrapedJob
 from typing import List
 from scraper.JobVision import scraping_JobVision 
 from scraper.Karbord import scraping_Karbord
+from scraper.scrape import scrape_both_sites
 from app.schemas.job import JobCreate, JobOut
-from app.crud.job import create_jobs_bulk
-from app.crud.keyword import get_or_create_keyword
+from app.crud.job import create_jobs_bulk, get_jobs_for_keyword
+from app.crud.keyword import get_keyword, create_keyword
 from app.crud.keyword_job import create_keyword_job_relations
 from database.session import get_db
-import re
 
 router = APIRouter()
 
@@ -29,61 +29,46 @@ def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
     Returns:
         List[ScrapedJob]: A unified list of structured job postings.
     """
-     
+
+    keyword_result = get_keyword(db , request.keyword)
+    keyword_id = keyword_result["id"]
+    
     if request.limit == 0:
-        return []
+       return {"jobs": [], "keyword_id": None}
     
     elif request.limit == 1 :
-        keyword_result = get_or_create_keyword(db , request.keyword)
+        if not keyword_id: 
+            keyword_id = create_keyword(db, request.keyword)["id"]
 
-        if keyword_result["status"] == 0 :
+            jobs = scraping_JobVision(request.keyword, request.limit)
 
-            jobs_jobvision = scraping_JobVision(request.keyword, request.limit)
-            jobs_karbord =[]
-            jobs = jobs_jobvision + jobs_karbord
-            keyword_id = keyword_result["id"]
-
-        elif keyword_result["status"] == 1:
-            pass # Retrieved from the database with conditions
-            jobs = []
-            keyword_id = keyword_result["id"]
+        elif keyword_id:
+            pass
+            result = get_jobs_for_keyword(db,keyword_id, request.limit)
+            if "jobs" not in result:
+                raise HTTPException(status_code=500, detail=f"Jobs key missing. Result: {result}")
+            jobs = result["jobs"]
         else: 
-            raise HTTPException(status_code=400, detail="Invalid keyword status.")
+            raise HTTPException(status_code=400, detail="Invalid keyword.")
 
     else: 
-        keyword_result = get_or_create_keyword(db , request.keyword)
+        if not keyword_id :
 
-        if keyword_result["status"] == 0 :
-            jobvision_count = int(request.limit * 0.6)
-            karbord_count = request.limit - jobvision_count
+            jobs = scrape_both_sites(request.keyword, request.limit)
 
-            jobs_jobvision = scraping_JobVision(request.keyword, jobvision_count)
-            jobs_karbord = scraping_Karbord(request.keyword, karbord_count)
-            jobs = jobs_jobvision + jobs_karbord
-
-            keyword_id = keyword_result["id"]
-
-        elif keyword_result["status"] == 1:
-            pass # Retrieved from the database with conditions
-            jobs= []
-            keyword_id = keyword_result["id"]
+        elif keyword_id:
+            pass
+            result = get_jobs_for_keyword(db,keyword_id, request.limit)
+            if "jobs" not in result:
+                raise HTTPException(status_code=500, detail=f"Jobs key missing. Result: {result}")
+            jobs = result["jobs"]
         else: 
             raise HTTPException(status_code=400, detail="Invalid keyword status.")
 
-    # map scraped dicts -> JobCreate
-    to_create: List[JobCreate] = [
-        JobCreate(
-            title=job["title"],
-            salary=job.get("salary"),
-            requirements=job.get("requirements", ["نامشخص"]),
-            link=normalize_job_link(job["link"])
-        )
-        for job in (jobs)
-    ]
-    jobs_result = create_jobs_bulk(db, to_create)
+    jobs_result = create_jobs_bulk(db, jobs)
     if jobs_result["status"]:
         if create_keyword_job_relations(db, keyword_id, jobs_result["job_ids"]):
-            return to_create
+            return jobs
     
     # _____ return result without storage 
     # all_jobs = jobs_jobvision + jobs_karbord
@@ -104,25 +89,3 @@ def scrape_jobs(request: ScrapeRequest, db: Session = Depends(get_db)):
     #         requirements=["Python"]
     #     )
     # ]
-
-
-
-def normalize_job_link(link: str) -> str:
-    """
-    Normalize job links from known sources like JobVision or Karbord.
-    Returns a cleaned link containing only the base + unique ID.
-    """
-    if "jobvision.ir" in link:
-        match = re.search(r'/jobs/(\d+)', link)
-        if match:
-            job_id = match.group(1)
-            return f"https://jobvision.ir/jobs/{job_id}"
-        
-    elif "karbord.io" in link:
-        match = re.search(r'/jobs/detail/(\d+)', link)
-        if match:
-            job_id = match.group(1)
-            return f"https://karbord.io/jobs/detail/{job_id}"
-
-    # fallback: return original if not matched
-    return link

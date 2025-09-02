@@ -6,6 +6,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 from typing import List, Dict
+from app.schemas.scrape import ScrapedJob
+from app.utils.link_utils import normalize_job_link
 
 def scraping_JobVision(keyword: str, max_jobs: int = 15) -> List[Dict[str, str]]:
     """
@@ -100,6 +102,16 @@ def scraping_JobVision(keyword: str, max_jobs: int = 15) -> List[Dict[str, str]]
                     "link": link
                 })
 
+                # map scraped dicts -> ScrapedJob
+                scraped_jobs: List[ScrapedJob] = [
+                    ScrapedJob(
+                        title=job["title"],
+                        salary=job.get("salary"),
+                        requirements=job.get("requirements", ["نامشخص"]),
+                        link=normalize_job_link(job["link"])
+                    )
+                    for job in all_jobs
+                ]
             # Go to next page if needed
             page += 1
 
@@ -107,4 +119,4 @@ def scraping_JobVision(keyword: str, max_jobs: int = 15) -> List[Dict[str, str]]
         # Close browser
         driver.quit()
 
-    return all_jobs
+    return scraped_jobs

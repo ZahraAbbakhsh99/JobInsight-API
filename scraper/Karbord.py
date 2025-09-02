@@ -6,6 +6,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from typing import List, Dict
 import time
+from app.schemas.scrape import ScrapedJob
+from app.utils.link_utils import normalize_job_link
 
 
 def scraping_Karbord(keyword: str, max_jobs: int = 10) -> List[Dict]:
@@ -149,6 +151,18 @@ def scraping_Karbord(keyword: str, max_jobs: int = 10) -> List[Dict]:
                 driver.switch_to.window(driver.window_handles[0])
                 time.sleep(1.5)
 
+                # map scraped dicts -> ScrapedJob
+                scraped_jobs: List[ScrapedJob] = [
+                    ScrapedJob(
+                        title=job["title"],
+                        salary=job.get("salary"),
+                        requirements=job.get("requirements", ["نامشخص"]),
+                        link=normalize_job_link(job["link"])
+                    )
+                    for job in jobs
+                ]
+
+
             except Exception as e:
                 print(f"Error processing a job: {e}")
                 continue
@@ -156,5 +170,5 @@ def scraping_Karbord(keyword: str, max_jobs: int = 10) -> List[Dict]:
     finally:
         driver.quit()
 
-    return jobs
+    return scraped_jobs
     
