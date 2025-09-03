@@ -2,12 +2,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 from collections.abc import Generator
+from app.core.config import settings
 
-POSTGRES_USER = "your_username"
-POSTGRES_PASSWORD = "your_password"
-POSTGRES_DB = "jobinsight"
-POSTGRES_HOST = "localhost"
-POSTGRES_PORT = "5432"
+POSTGRES_USER = settings.POSTGRES_USER
+POSTGRES_PASSWORD = settings.POSTGRES_PASSWORD
+POSTGRES_DB = settings.POSTGRES_DB
+POSTGRES_HOST = settings.POSTGRES_HOST
+POSTGRES_PORT = settings.POSTGRES_PORT
 
 SQLALCHEMY_DATABASE_URL = (
     f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"

@@ -5,12 +5,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database.session import get_db
 from fastapi import Depends
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.config import settings
 
-JWT_SECRET = "YOUR_SECRET_KEY"
-JWT_ALGORITHM = "HS256"
-OTP_EXPIRE_MINUTES = 10
-TOKEN_EXPIRE_HOURS = 24
+JWT_SECRET = settings.JWT_SECRET
+JWT_ALGORITHM = settings.JWT_ALGORITHM
+TOKEN_EXPIRE_HOURS = settings.TOKEN_EXPIRE_HOURS
 
 def generate_otp(length: int = 6):
     return ''.join(random.choices(string.digits, k=length))
