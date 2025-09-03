@@ -2,6 +2,12 @@ from database.base import Base
 from database.session import engine
 from fastapi import FastAPI
 from app.api.routes import auth, jobs, protected_routes
+from app.models.users import User
+from app.models.tokens import Token
+from app.models.otps import Otp
+from app.models.job import Job
+from app.models.keyword import Keyword
+from app.models.keyword_job import keyword_job
 
 app = FastAPI()
 
