@@ -9,6 +9,8 @@ from app.models.tokens import Token
 from database.session import get_db
 from datetime import timedelta
 from app.utils.auth_utils import *
+from app.services.email import send_email 
+from app.core.config import settings
 
 router = APIRouter(tags=["Authentication"])
 
@@ -25,12 +27,14 @@ async def authenticate_user(request: AuthRequest, db: Session = Depends(get_db))
         db.refresh(user)
 
     code = generate_otp()
-    expires_at = db.query(func.now()).scalar() + timedelta(minutes=OTP_EXPIRE_MINUTES)
+    expires_at = db.query(func.now()).scalar() + timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
     otp = Otp(user_id=user.id, code=code, expires_at=expires_at)
     db.add(otp)
     db.commit()
 
-    return {"message": f"OTP = {code}"}
+    send_email(to=request.email, subject="Your OTP Code IN JobInsight", body=f"Your OTP is: {code}")
+
+    return {"message": "OTP sent to email"}
 
 
 @router.post("/auth/verify-otp", response_model=AuthResponse)
