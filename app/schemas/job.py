@@ -22,3 +22,6 @@ class JobRequest(BaseModel):
 
 class JobResponse(BaseModel):
     jobs: List[JobBase]
+
+class DetailResponse(BaseModel):
+    detail: str
