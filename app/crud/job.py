@@ -140,91 +140,23 @@ def delete_jobs_by_links(db: Session, links: List[str]) -> int:
         db.rollback()
         return 0
 
-def get_jobs_for_keyword(db: Session, keyword_id: int, limit: int):
-
+def get_jobs_by_keyword(db: Session, keyword_id: int, limit: int):
     """
-    Retrieve jobs by keyword with priority:
-    1. Fresh jobs (< 4 days old).
-    2. If not enough, scrape new ones.
-    3. If still not enough, fallback to older jobs.
+    Get jobs related to a keyword with limit.
     """
-
     try:
-        # get current DB time
-        db_now = db.execute(select(func.now()))
-        current_time = db_now.scalar_one().replace(tzinfo=None)
-    
-        # get job IDs related to the keyword
-        existing_jobs = db.execute(
-            select(Job.link, Job.scraped_at)
-            .join(keyword_job, keyword_job.c.job_id == Job.id)
-            .where(keyword_job.c.keyword_id == keyword_id)
-        ).mappings().all()
+        keyword = db.query(Keyword).filter(Keyword.id == keyword_id).first()
+        if not keyword:
+            return [], 0
 
-        # split jobs into two lists based on scraped_at(fresh vs old)
-        fresh_jobs, old_jobs = [], []
+        jobs_query = db.query(Job).join(Job.keywords).filter(Keyword.id == keyword_id)
 
-        for job in existing_jobs:
-            if current_time - job.scraped_at <= timedelta(days=4):
-                fresh_jobs.append((job["link"], job["scraped_at"]))
-            else:
-                old_jobs.append((job["link"], job["scraped_at"]))
+        total_jobs = jobs_query.count()
+        real_limit = min(limit, total_jobs)
 
-        # sort fresh by newest first
-        fresh_jobs.sort(key=lambda x: x[1], reverse=True)
-        old_jobs.sort(key=lambda x: x[1], reverse=True)
+        jobs = jobs_query.limit(real_limit).all()
 
-        final_jobs = []
-
-        # case 1: there is already enough fresh jobs
-        if len(fresh_jobs) >= limit:
-            selected_links = [job[0] for job in fresh_jobs[:limit]]
-            # deleted_links = [job[0]for job in old_jobs]
-
-            final_jobs = get_jobs_by_links(db, selected_links)
-
-            # for link in deleted_links:
-            #     delete_keyword_job_records(db, keyword_id, link) 
-            # delete_jobs_by_links(db, deleted_links)
-
-            return {"status": "db_only", "jobs": final_jobs}
-
-        # case 2: not enough, scrape more
-        needed = limit - len(fresh_jobs)
-        scraped_jobs = []
-        keyword_text = get_keyword(db, keyword_id)
-
-        if needed== 1:
-            scraped_jobs = scraping_JobVision(keyword_text, 1)
-        else:
-            scraped_jobs = scrape_both_sites(keyword_text, needed)
-
-        # merge scraped with fresh, ensuring uniqueness
-        seen_links = set(job[0] for job in fresh_jobs)
-        for job in scraped_jobs:
-            if job.link not in seen_links:
-                fresh_jobs.append((job.link, job.scraped_at))
-                seen_links.add(job.link)
-
-        # case 3: if still not enough, use old jobs
-        if len(fresh_jobs) < limit:
-            remaining = limit - len(fresh_jobs)
-            fresh_jobs.extend(old_jobs[:remaining])
-
-        selected_links = [job[0] for job in fresh_jobs[:limit]]
-        
-        final_jobs = get_jobs_by_links(db, selected_links) 
-
-        # case4: if still not enough
-        if len(fresh_jobs) < limit:
-            return {
-                "jobs": final_jobs,
-                "partial": True,
-                "message": f"Only {len(final_jobs)} jobs available now, scraping in progress..."
-            }
-
-        return {"status": "mixed", "jobs": final_jobs}
-
+        return jobs
     
     except SQLAlchemyError as e:
         # database error
