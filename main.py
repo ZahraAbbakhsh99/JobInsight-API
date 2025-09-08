@@ -8,6 +8,7 @@ from app.models.otps import Otp
 from app.models.job import Job
 from app.models.keyword import Keyword
 from app.models.keyword_job import keyword_job
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
@@ -24,3 +25,5 @@ app.include_router(jobs.router, prefix="")
 # export
 app.include_router(protected_routes.router, prefix="")
 
+# serve static files
+app.mount("/files", StaticFiles(directory="files"), name="files")
