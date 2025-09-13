@@ -9,12 +9,17 @@ from app.models.job import Job
 from app.models.keyword import Keyword
 from app.models.keyword_job import keyword_job
 from fastapi.staticfiles import StaticFiles
+from app.worker.scheduler import *
 
 app = FastAPI()
 
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
+    start_scheduler()
+
+    # test
+    add_on_demand_job("python")
 
 # Auth
 app.include_router(auth.router ,prefix="")
@@ -27,3 +32,7 @@ app.include_router(protected_routes.router, prefix="")
 
 # serve static files
 app.mount("/files", StaticFiles(directory="files"), name="files")
+
+@app.on_event("shutdown")
+def on_shutdown():
+    shutdown_scheduler()
