@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.schemas.job import *
 from sqlalchemy.orm import Session
 from database.session import get_db
-from app.crud.keyword import get_keyword
+from app.crud.keyword import *
+from app.crud.queue import *
 from app.crud.job import get_jobs_by_keyword
 from app.models.users import User
 from app.services.auth import get_current_user
@@ -16,14 +17,15 @@ async def get_jobs(request: JobRequest,
                    current_user: Optional[User] = Depends(get_current_user)):
     """
     Return a list of job postings based on a keyword and limit.
+    If keyword doesn't exist, queue it for later processing.
     """
-    #  we should call the scraping service here.
-    
+
     keyword_result = get_keyword(db , request.keyword)
     if keyword_result["status"]:
         keyword_id = keyword_result["id"]
     elif keyword_result["status"] == 0:
-       # It must be queued for processing...
+        add_keyword_to_queue(db, request.keyword)
+
         if current_user:
             return DetailResponse(
                 detail=f"Your request will be queued and you will be notified by email {current_user.email} once it has been processed."

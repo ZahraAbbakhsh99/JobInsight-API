@@ -4,7 +4,8 @@ from app.schemas.job import *
 from sqlalchemy.orm import Session
 from app.services.auth import get_current_user
 from database.session import get_db
-from app.crud.keyword import get_keyword
+from app.crud.keyword import *
+from app.crud.queue import *
 from app.crud.job import get_jobs_by_keyword
 from app.services.csv import *
 import uuid
@@ -18,6 +19,8 @@ async def download_jobs_csv(request: CSVRequest,
     """
     Generate a CSV file with job postings and 
     return a link to download the file.
+    If keyword is not yet processed, 
+    queue it and notify the user by email when ready.
     """
 
     if not current_user:
@@ -27,15 +30,11 @@ async def download_jobs_csv(request: CSVRequest,
     if keyword_result["status"]:
         keyword_id = keyword_result["id"]
     elif keyword_result["status"] == 0:
-       # It must be queued for processing...
-        if current_user:
-            return DetailResponse(
-                detail=f"Your request will be queued and you will be notified by email {current_user.email} once it has been processed."
-            )
-        else:
-            return DetailResponse(
-                detail="Your request cannot be processed at this time and has been placed in a queue."
-            )
+        add_keyword_to_queue(db, request.keyword, user_id=current_user.id)
+        
+        return DetailResponse(
+            detail=f"Your request will be queued and you will be notified by email {current_user.email} once it has been processed."
+        )
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
