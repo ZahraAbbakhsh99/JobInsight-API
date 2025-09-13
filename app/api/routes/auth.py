@@ -9,7 +9,7 @@ from app.models.tokens import Token
 from database.session import get_db
 from datetime import timedelta
 from app.utils.auth_utils import *
-from app.services.email import send_email 
+from app.utils.email_utils import send_email_async
 from app.core.config import settings
 
 router = APIRouter(tags=["Authentication"])
@@ -32,7 +32,7 @@ async def authenticate_user(request: AuthRequest, db: Session = Depends(get_db))
     db.add(otp)
     db.commit()
 
-    send_email(to=request.email, subject="Your OTP Code IN JobInsight", body=f"Your OTP is: {code}")
+    send_email_async(to=request.email, subject="Your OTP Code IN JobInsight", body=f"Your OTP is: {code}")
 
     return {"message": "OTP sent to email"}
 
