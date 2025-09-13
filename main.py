@@ -8,6 +8,7 @@ from app.models.otps import Otp
 from app.models.job import Job
 from app.models.keyword import Keyword
 from app.models.keyword_job import keyword_job
+from app.models.keyword_queue import KeywordQueue
 from fastapi.staticfiles import StaticFiles
 from app.worker.scheduler import *
 
