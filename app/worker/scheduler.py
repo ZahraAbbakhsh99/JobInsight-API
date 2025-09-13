@@ -24,6 +24,14 @@ def start_scheduler():
         replace_existing=True
     )
 
+    scheduler.add_job(
+        scrap_job,
+        trigger=CronTrigger(day='*/3', hour=5, minute=0),
+        id="fallback_scraper_job",
+        replace_existing=True
+    )
+    logger.info("Fallback scraper job scheduled every 3 days at 5 AM")
+
     scheduler.start()
     logger.info(f"Scheduler started at {datetime.now()}")
     print(f"[{datetime.now()}] Scheduler started!")
