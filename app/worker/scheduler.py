@@ -7,10 +7,15 @@ import logging
 from sqlalchemy.orm import Session
 
 from database.session import get_db
+from database.session import SessionLocal
 from app.crud.queue import get_pending_keywords, mark_keyword_done
 from app.crud.users import get_user_email
+from app.crud.keyword import *
 from app.utils.email_utils import send_email_async
-
+from app.utils.seed_keywords import seed_initial_keywords
+from scraper.scrape import scrape_jobs
+from app.crud.job import create_jobs_with_keyword
+from app.utils.initial_keywords import initial_keywords
 # logging setup
 logging.basicConfig(
     filename="scheduler.log",
@@ -41,11 +46,29 @@ def process_keyword(db: Session, keyword_item):
     """
     logger.info(f"Processing keyword: {keyword_item.keyword}")
 
+    # Check if keyword already scraped
+    if get_keyword(db, keyword_item.keyword):
+        # Already processed, just notify user
+        if keyword_item.user_id:
+            user_email = get_user_email(db, keyword_item.user_id)
+            send_email_async(
+                user_email,
+                "Keyword Processed",
+                f"Your keyword '{keyword_item.keyword}' has already been processed. CSV is ready."
+            )
+        mark_keyword_done(db, keyword_item.id)
+        return
+    
     # run the actual scraper
-    scrap_job(keyword_item.keyword)
+    jobs= scrape_jobs(keyword_item.keyword)
+
+    # Save jobs to DB
+    create_jobs_with_keyword(db, keyword_item.keyword, jobs, )
 
     # mark the keyword as done in queue
     mark_keyword_done(db, keyword_item.id)
+
+    # Notify user
     if keyword_item.user_id:
         user_email = get_user_email(db, keyword_item.user_id)
         send_email_async(
@@ -94,7 +117,9 @@ def start_scheduler():
     """
     Schedule daily and fallback jobs, and optionally run an initial batch.
     """
-    scrap_job()
+    # seed initial keywords and scrape job
+    with SessionLocal() as db:
+        seed_initial_keywords(db, initial_keywords)
     
     # daily job at 2 AM
     scheduler.add_job(
@@ -121,13 +146,3 @@ def start_scheduler():
 def shutdown_scheduler():
     scheduler.shutdown()
     logger.info("Scheduler shutdown.")
-
-
-# for example
-def scrap_job (keyword: str = None):
-    if keyword:
-        message = f"Scraping only for keyword: {keyword}"
-    else:
-        message = "Scraping for all keywords in DB"
-    print(message)
-    logger.info(message)
