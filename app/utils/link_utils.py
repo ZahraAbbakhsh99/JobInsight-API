@@ -6,6 +6,9 @@ def normalize_job_link(link: str) -> str:
     Normalize job links from known sources like JobVision or Karbord.
     Returns a cleaned link containing only the base + unique ID.
     """
+    if not link:
+        return None
+
     if "jobvision.ir" in link:
         match = re.search(r'/jobs/(\d+)', link)
         if match:
