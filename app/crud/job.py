@@ -3,9 +3,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, update, delete, func
 from app.models.job import Job
 from app.models.keyword_job import keyword_job
-from scraper.JobVision import scraping_JobVision 
-from scraper.Karbord import scraping_Karbord
-from scraper.scrape import scrape_both_sites
 from app.schemas.job import JobBase, JobCreate
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from datetime import timedelta
@@ -166,3 +163,73 @@ def get_jobs_by_keyword(db: Session, keyword_id: int, limit: int):
     except Exception as e:
         # Error handling
          return {"status": "error", "message": f"Unexpected: {str(e)}"}
+
+def create_jobs_with_keyword(db: Session, keyword_text: str, jobs_in: Iterable[JobCreate]) -> dict:
+    """
+    Save a keyword, its jobs, and relations to the database in a single transaction.
+    
+    Returns:
+        dict: {
+            "status": 1   -> all saved successfully,
+            "status": 0   -> nothing saved,
+            "status": -1  -> partial success
+        }
+    """
+    try:
+        # 1. Create or get keyword
+        keyword = get_keyword(db, keyword_text)
+        if not keyword:
+            keyword = Keyword(value=keyword_text)
+            db.add(keyword)
+            db.flush()  # get keyword.id without committing
+
+        keyword_id = keyword.id
+
+        # 2. Create jobs
+        job_ids = []
+        for job in jobs_in:
+            db_job = db.query(Job).filter(Job.link == job.link).first()
+            if db_job:
+                # Update existing job
+                db_job.title = job.title
+                db_job.salary = job.salary
+                db_job.requirements = ",".join(job.skills) if job.skills else "نامشخص"
+                db_job.scraped_at = func.now()
+            else:
+                db_job = Job(
+                    title=job.title,
+                    salary=job.salary,
+                    requirements=",".join(job.skills) if job.skills else "نامشخص",
+                    link=job.link
+                )
+                db.add(db_job)
+            db.flush()
+            job_ids.append(db_job.id)
+
+        # 3. Create keyword-job relations
+        for jid in job_ids:
+            exists = db.execute(
+                select(keyword_job.c.keyword_id).where(
+                    keyword_job.c.keyword_id == keyword_id,
+                    keyword_job.c.job_id == jid
+                )
+            ).scalar_one_or_none()
+            
+            if not exists:
+                db.execute(keyword_job.insert().values(keyword_id=keyword_id, job_id=jid))
+            else:
+                db.execute(
+                    update(keyword_job)
+                    .where(
+                        keyword_job.c.keyword_id == keyword_id,
+                        keyword_job.c.job_id == jid
+                    )
+                    .values(last_update=func.now())
+                )
+
+        db.commit()
+        return {"status": 1, "keyword_id": keyword_id, "job_ids": job_ids}
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        return {"status": 0, "error": str(e)}
