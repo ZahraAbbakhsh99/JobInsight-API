@@ -1,174 +1,152 @@
-from selenium import webdriver
+from selenium import webdriver as wd
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 from typing import List, Dict
+import urllib.parse
 import time
-from app.schemas.scrape import ScrapedJob
+from app.schemas.job import JobBase
 from app.utils.link_utils import normalize_job_link
+from app.utils.text_utils import clean_text
 
+BASE_URL = "https://karbord.io/jobs"
 
-def scraping_Karbord(keyword: str, max_jobs: int = 10) -> List[Dict]:
+def scraping_Karbord(keyword: str) -> List[Dict[str, str]]:
     """
     Scrape job listings from Karbord.io based on a keyword.
 
     Args:
         keyword (str): Search keyword for job titles.
-        max_jobs (int): Maximum number of job listings to return.
 
     Returns:
-        List[Dict[str, str]]: List of job dictionaries with title, salary, requirements and link.
+        List[Dict[str, str]]: List of job dictionaries with title, salary, skills and link.
     """
-    options = Options()
-    options.add_argument("--headless")
+    chrome_options = wd.ChromeOptions()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
     
     # Initialize Selenium Chrome WebDriver
-    driver = webdriver.Chrome(options=options, service=Service())
+    driver = wd.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
-    jobs = []  # To store extracted job info
+    encoded = urllib.parse.quote(keyword)
+    all_jobs = []  # To store extracted job info
+    page = 1
 
     try:
-        # Go to the homepage
-        driver.get("https://karbord.io/")
-
-        # Wait until the search input is loaded
-        wait = WebDriverWait(driver, 10)
-        search_input = wait.until(EC.presence_of_element_located(
-            (By.CSS_SELECTOR, 'input[placeholder="چه شغلی؟"]')
-        ))
-
-        # Enter the keyword in the search input
-        search_input.send_keys(keyword)
-
-        # Click the "Search" button
-        search_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
-        search_button.click()
-
-        # Wait for job cards to load
-        job_cards = wait.until(EC.presence_of_all_elements_located(
-            (By.CSS_SELECTOR, 'a.job-card')
-        ))
-
-        # Extract job info from each card
-        for job in job_cards:
+        while True: 
+            url = f"{BASE_URL}?keyword={encoded}&page={page}&sort=0"
+            driver.get(url)
+            time.sleep(1)
             try:
+                WebDriverWait(driver, 5).until(
+                        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a.job-card, app-jobs-empty-state"))
+                    )
+                empty_state = driver.find_elements(By.CSS_SELECTOR, "app-jobs-empty-state")
+                
+                # Stop if there are no job cards
+                if empty_state:
+                    break
+            except TimeoutException:
+                print("Timeout")
+                break
+           
+            job_cards = driver.find_elements(By.CSS_SELECTOR, "a.job-card")
+            if not job_cards:
+                break
 
+            # Extract job info from each card
+            for job in job_cards:
                 # Job title
                 try:
-                    title = job.find_element(By.CSS_SELECTOR, 'h4.heading-01').text.strip()
+                    title = clean_text(job.find_element(By.CSS_SELECTOR, "h4").text.strip())
                 except:
-                    title = "نامشخص"
-                    continue
+                    title = None
 
                 # Job link
                 try:
-                    el_id = job.get_attribute("id")
-                    if el_id and el_id.startswith("el-"):
-                        job_id = el_id.replace("el-", "")
-                        link = f"https://karbord.io/jobs/detail/{job_id}"
+                    job_id = job.get_attribute("id").replace("el-", "")
+                    link = f"https://karbord.io/jobs/detail/{job_id}"
+                    link = normalize_job_link(link)
                 except:
-                    link = "نامشخص"
+                    link = None
+
+                if not title or not link:
                     continue
 
-                # Job salary
-                salary = "نامشخص"
-                salary_icon = job.find_elements(By.CSS_SELECTOR, 'img[alt="salary"]')
-                if salary_icon:
-                    salary_span = job.find_elements(By.CSS_SELECTOR, 'span.body-short-01')
-                    for s in salary_span:
-                        if "تومان" in s.text:
-                            salary = s.text.strip()
-                            break
-
-                # Open job detail page
-                driver.execute_script("window.open('');")
-                driver.switch_to.window(driver.window_handles[1])
-                driver.get(link)
-
-                skills = []
-
+                # Job salary (optional)
                 try:
-                    # Wait for the entire container that includes all job conditions
-                    WebDriverWait(driver, 8).until(
-                        EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.job-specification__condition-value'))
-                    )
-
-                    # Find the parent <div> that has <label> "نرم افزارها"
-                    skill_div = None
-                    containers = driver.find_elements(By.CSS_SELECTOR, 'div.mx-6.border-t.py-4')
-                    for div in containers:
-                        try:
-                            label = div.find_element(By.CSS_SELECTOR, 'label').text.strip()
-                            if label == "نرم افزارها":
-                                skill_div = div
-                                break
-                        except:
-                            continue
-
-                    # Extract skill name and level
-                    if skill_div:
-                        tags = skill_div.find_elements(By.CSS_SELECTOR, 'app-tag')
-                        for tag in tags:
-                            parts = tag.text.strip().split("|")
-                            skill = parts[0].strip()
-                            level = parts[1].strip() if len(parts) > 1 else "نامشخص"
-                            skills.append(f"{skill} | {level}")
-
-                except Exception as e:
-                    print(f"Error loading app-tag skills: {e}")
-
-                # Extract skills from <li class='tag'> elements
-                try:
-                    li_tags = driver.find_elements(By.CSS_SELECTOR, 'li.tag')
-                    for li in li_tags:
-                        text = li.text.strip()
-                        if text and text not in [s.split("|")[0].strip() for s in skills]:
-                            skills.append(f"{text}")
-                except Exception as e:
-                    print(f"Error loading li.tag skills: {e}")
-
-                if not skills:
-                    print(f"No skills found for job {job_id}, skipping.")
-                    driver.close()
-                    driver.switch_to.window(driver.window_handles[0])
-                    continue
+                    spans = job.find_elements(By.XPATH, ".//span[contains(text(),'تومان')]")
+                    salary = spans[0].text.strip() if spans else "نامشخص"
+                except:
+                    salary = "نامشخص"
 
                 # Append job to results list
-                jobs.append({
+                all_jobs.append({
                     "title": title,
-                    "salary": salary,
-                    "requirements": skills,
-                    "link": link,
+                    "salary": salary if salary else "نامشخص",
+                    "link": link
                 })
+            # Go to next page
+            page += 1
 
-                if len(jobs) >= max_jobs:
-                    break
+        for job in all_jobs:
+            # Open job detail page
+            driver.get(job["link"])
 
-                # Close job tab and go back to main
-                driver.close()
-                driver.switch_to.window(driver.window_handles[0])
-                time.sleep(1.5)
-
-                # map scraped dicts -> ScrapedJob
-                scraped_jobs: List[ScrapedJob] = [
-                    ScrapedJob(
-                        title=job["title"],
-                        salary=job.get("salary"),
-                        requirements=job.get("requirements", ["نامشخص"]),
-                        link=normalize_job_link(job["link"])
-                    )
-                    for job in jobs
-                ]
-
-
-            except Exception as e:
-                print(f"Error processing a job: {e}")
+            # Wait for the entire container that includes all job conditions
+            try:
+                WebDriverWait(driver, 8).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.job-specification__condition-value"))
+                )
+            except TimeoutException:
+                job["skills"] = []
                 continue
 
+            skills = []
+            # Extract skills
+            try:
+                li_tags = driver.find_elements(By.CSS_SELECTOR, "li.tag")
+                for li in li_tags:
+                    skill = li.text.strip()
+                    if skill:
+                        skills.append(skill)
+
+                software_tags = driver.find_elements(
+                By.CSS_SELECTOR, "app-tag.tag.job-specification__condition-value__tag"
+                )
+                for tag in software_tags:
+                    parts = tag.text.strip().split("|")
+                    if len(parts) == 2:
+                        skill, level = parts[0].strip(), parts[1].strip()
+                        skills.append(f"{skill} ({level})")
+                    elif parts:
+                        skills.append(parts[0].strip())
+            
+            except Exception as e :
+                job["skills"] = None 
+                
+            job["skills"] = skills
+            
+        # keep only jobs that have non-empty 'skills' lists
+        all_jobs = [job for job in all_jobs if job.get("skills")]
     finally:
+        # Close browser
         driver.quit()
 
+    # map scraped dicts -> ScrapedJob
+    scraped_jobs: List[JobBase] = [
+        JobBase(
+            title=job["title"],
+            salary=job.get("salary"),
+            skills=job.get("skills", ["نامشخص"]),
+            link=job.get("link"),
+        )
+        for job in all_jobs
+    ]
+
     return scraped_jobs
-    

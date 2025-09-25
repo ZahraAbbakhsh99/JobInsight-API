@@ -1,14 +1,16 @@
 from scraper.JobVision import scraping_JobVision 
 from scraper.Karbord import scraping_Karbord
+from typing import List
+from app.schemas.job import JobBase
 
-def scrape_both_sites(keyword: str, limit : int):
+def scrape_jobs(keyword: str) -> List[JobBase]:
+    """
+    Scrape jobs from both JobVision and Karbord without a limit.
+    Combines results from both sites into a single list.
+    """
+    jobs_jobvision = scraping_JobVision(keyword)
+    jobs_karbord = scraping_Karbord(keyword)
 
-    jobvision_count = int(limit * 0.6)
-    karbord_count = limit - jobvision_count
-
-    jobs_jobvision = scraping_JobVision(keyword, jobvision_count)
-    jobs_karbord = scraping_Karbord(keyword, karbord_count)
-
-    Scraped_job = jobs_jobvision + jobs_karbord
+    Scraped_job: List[JobBase] = jobs_jobvision + jobs_karbord
 
     return Scraped_job
