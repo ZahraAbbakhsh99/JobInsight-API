@@ -9,7 +9,7 @@ class Job(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(Text, nullable=False)
     salary = Column(Text, nullable=True)
-    requirements = Column(Text, nullable=False)
+    skills = Column(Text, nullable=False)
     link = Column(Text, nullable=False, unique=True)
     scraped_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
 

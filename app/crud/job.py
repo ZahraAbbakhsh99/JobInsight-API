@@ -175,16 +175,20 @@ def create_jobs_with_keyword(db: Session, keyword_text: str, jobs_in: Iterable[J
             "status": -1  -> partial success
         }
     """
+    if not jobs_in:
+        return {"status": 0, "error": "No jobs provided."}
     try:
         # 1. Create or get keyword
-        keyword = get_keyword(db, keyword_text)
-        if not keyword:
-            keyword = Keyword(value=keyword_text)
-            db.add(keyword)
+        keyword_data = get_keyword(db, keyword_text)
+
+        if keyword_data["status"] == 1:
+            keyword_id = keyword_data["id"]
+        else:
+            new_keyword = Keyword(value=keyword_text)
+            db.add(new_keyword)
             db.flush()  # get keyword.id without committing
-
-        keyword_id = keyword.id
-
+            keyword_id = new_keyword.id
+        
         # 2. Create jobs
         job_ids = []
         for job in jobs_in:
@@ -193,13 +197,13 @@ def create_jobs_with_keyword(db: Session, keyword_text: str, jobs_in: Iterable[J
                 # Update existing job
                 db_job.title = job.title
                 db_job.salary = job.salary
-                db_job.requirements = ",".join(job.skills) if job.skills else "نامشخص"
+                db_job.skills = ",".join(job.skills) if job.skills else "نامشخص"
                 db_job.scraped_at = func.now()
             else:
                 db_job = Job(
                     title=job.title,
                     salary=job.salary,
-                    requirements=",".join(job.skills) if job.skills else "نامشخص",
+                    skills=",".join(job.skills) if job.skills else "نامشخص",
                     link=job.link
                 )
                 db.add(db_job)
