@@ -8,11 +8,10 @@ from app.crud.keyword import *
 from app.crud.queue import *
 from app.crud.job import get_jobs_by_keyword
 from app.services.csv import *
-import uuid
 
 router = APIRouter(tags=["Jobs"])
 
-@router.post("/jobs/download", response_model=CSVResponse)
+@router.post("/jobs/download")
 async def download_jobs_csv(request: CSVRequest,
                             db: Session = Depends(get_db), 
                             current_user = Depends(get_current_user)):
@@ -48,9 +47,8 @@ async def download_jobs_csv(request: CSVRequest,
     if not jobs:
         raise HTTPException(status_code=404, detail="No jobs found for this keyword")
     
-    filename = f"jobs_{request.keyword}_{uuid.uuid4().hex}.csv"
-    filepath = save_jobs_to_csv(jobs, filename)
+    # Generate unique filename
+    filename = f"jobinsight_{request.keyword}{request.limit}.xlsx"
 
-    download_link = f"/files/{filename}"
-
-    return CSVResponse(download_link=download_link)
+    # Save jobs to CSV and give its link
+    return save_jobs_to_csv(jobs, filename)

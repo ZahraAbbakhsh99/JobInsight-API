@@ -1,21 +1,40 @@
-import csv
-from pathlib import Path
-from fastapi import HTTPException
+import tempfile
+import os
 from app.schemas.job import *
+from openpyxl import Workbook
+from fastapi.responses import FileResponse
 
-FILES_DIR = Path("files")
-FILES_DIR.mkdir(exist_ok=True)
+def save_jobs_to_csv(jobs: list[JobBase], filename) -> str:
+    """
+    Save jobs to an Excel (.xlsx) file and return the file path.
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "JobInsight"
 
-def save_jobs_to_csv(jobs: list[JobBase], filename: str) -> str:
-    """
-    Save jobs to a CSV file and return the path
-    """
-    filepath = FILES_DIR / filename
-    with open(filepath, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        # header
-        writer.writerow(["title", "salary", "link", "skills"])
-        # rows
-        for job in jobs:
-            writer.writerow([job.title, job.salary or "", job.link, ",".join(job.skills)])
-    return str(filepath)
+    filepath = filename
+
+    tmp_dir = tempfile.mkdtemp()
+    filepath = os.path.join(tmp_dir, filepath)
+
+    # header
+    headers = ["title", "salary", "link", "skills"]
+    ws.append(headers)
+
+    # rows
+    for job in jobs:
+        ws.append([
+            job.title,
+            job.salary or "",
+            job.link,
+            job.skills
+        ])
+
+    wb.save(filepath)
+    return FileResponse(
+        filepath,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=filename,
+        background=lambda: os.remove(filepath)
+    )
+    # return filepath
