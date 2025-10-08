@@ -16,11 +16,12 @@ app = FastAPI()
 
 @app.on_event("startup")
 def startup():
+    # Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    start_scheduler()
 
-    # test
-    add_on_demand_job("python")
+    start_scheduler()
+    # # test
+    # add_on_demand_job("python")
 
 # Auth
 app.include_router(auth.router ,prefix="")
@@ -30,9 +31,6 @@ app.include_router(jobs.router, prefix="")
 
 # export
 app.include_router(protected_routes.router, prefix="")
-
-# serve static files
-app.mount("/files", StaticFiles(directory="files"), name="files")
 
 @app.on_event("shutdown")
 def on_shutdown():
