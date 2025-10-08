@@ -13,7 +13,7 @@ from app.crud.users import get_user_email
 from app.crud.keyword import *
 from app.utils.email_utils import send_email_async
 from app.utils.seed_keywords import seed_initial_keywords
-from scraper.scrape import scrape_jobs
+from app.worker.scraper.scrape import scrape_jobs
 from app.crud.job import create_jobs_with_keyword
 from app.utils.initial_keywords import initial_keywords
 # logging setup

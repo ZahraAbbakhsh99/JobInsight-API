@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from scraper.scrape import scrape_jobs
+from app.worker.scraper.scrape import scrape_jobs
 from app.crud.job import create_jobs_with_keyword
 from app.crud.keyword import *
 

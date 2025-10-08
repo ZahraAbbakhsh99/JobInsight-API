@@ -1,5 +1,5 @@
-from scraper.JobVision import scraping_JobVision 
-from scraper.Karbord import scraping_Karbord
+from app.worker.scraper.JobVision import scraping_JobVision 
+from app.worker.scraper.Karbord import scraping_Karbord
 from typing import List
 from app.schemas.job import JobBase
 
@@ -12,5 +12,5 @@ def scrape_jobs(keyword: str) -> List[JobBase]:
     jobs_karbord = scraping_Karbord(keyword)
 
     Scraped_job: List[JobBase] = jobs_jobvision + jobs_karbord
-
+    
     return Scraped_job
